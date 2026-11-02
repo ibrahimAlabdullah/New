@@ -1,0 +1,15 @@
+{
+  "name": "house-walkthrough",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "جولة ثلاثية الأبعاد داخل المنزل (طابقين) مع تصدير فيديو ونموذج GLB",
+  "scripts": {
+    "video": "node tools/render-video.mjs",
+    "glb": "node tools/export-glb.mjs"
+  },
+  "dependencies": {
+    "@fontsource/tajawal": "^5.1.0",
+    "three": "0.169.0"
+  }
+}
