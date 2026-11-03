@@ -745,11 +745,11 @@ function furnish(grp, level) {
   for (const x of [1.9, 3.1, 4.3]) { W.cyl(M.majlisSeat, x, 0.55, 0.13, 0.27, 0.42, 12); W.cyl(M.majlisSeat, x, 3.95, 0.13, 0.27, 0.42, 12); }
   rug(W, M.rugMajlis, 1.2, 1.1, 5.2, 3.4);
   // صينية وتمر وقهوة
-  W.cyl(M.walnut, 3.0, 2.25, 0.45, 0, 0.3, 24);
-  W.cyl(M.gold, 3.0, 2.25, 0.38, 0.3, 0.32, 24);
-  W.cyl(M.gold, 2.85, 2.2, 0.08, 0.32, 0.5, 12, 0.04); W.cyl(M.gold, 2.85, 2.2, 0.03, 0.5, 0.58, 8, 0.015);
-  for (const a of [0, 1.2, 2.4, 3.6]) W.cyl(M.porcelain, 3.15 + Math.cos(a) * 0.1, 2.3 + Math.sin(a) * 0.1, 0.03, 0.32, 0.37, 10, 0.035);
-  W.cyl(M.porcelain, 3.0, 2.0, 0.1, 0.32, 0.36, 14, 0.12);
+  W.cyl(M.walnut, 3.2, 2.8, 0.42, 0, 0.3, 24);
+  W.cyl(M.gold, 3.2, 2.8, 0.36, 0.3, 0.32, 24);
+  W.cyl(M.gold, 3.05, 2.75, 0.08, 0.32, 0.5, 12, 0.04); W.cyl(M.gold, 3.05, 2.75, 0.03, 0.5, 0.58, 8, 0.015);
+  for (const a of [0, 1.2, 2.4, 3.6]) W.cyl(M.porcelain, 3.35 + Math.cos(a) * 0.1, 2.85 + Math.sin(a) * 0.1, 0.03, 0.32, 0.37, 10, 0.035);
+  W.cyl(M.porcelain, 3.2, 2.55, 0.1, 0.32, 0.36, 14, 0.12);
   // فانوس ونباتات
   W.box(M.gold, 6.1, 0, 0.3, 6.4, 0.6, 0.6); W.box(M.lampWarm, 6.14, 0.1, 0.34, 6.36, 0.5, 0.56);
   plant(W, 6.15, 0, 4.05, 0.9);
@@ -931,8 +931,8 @@ function bedroom2(grp, y0, up) {
   W.box(M.cabUp, 4.2, 0, 13.55, R.x2, 2.5, 15.85);
   for (let z = 13.55; z < 15.8; z += 0.575) W.box(M.black, 4.195, 1.0, z + 0.27, 4.2, 1.4, z + 0.29);
   // مكتب وكرسي قرب النافذة الخلفية
-  { const D = new Frame(grp, 2.4, y0, 15.55); table(D, 1.3, 0.6, 0.75, M.oak, M.black); D.cyl(M.black, 0.45, 0, 0.015, 0.75, 1.15, 6); D.cyl(M.lampWarm, 0.45, -0.05, 0.08, 1.1, 1.18, 10, 0.05); flowers(D, -0.4, 0.75, 0, [M.flowerYellow], 0.7); }
-  { const C = new Frame(grp, 2.4, y0, 14.95, Math.PI); chair(C, M.black, M.sofaDark); }
+  { const D = new Frame(grp, 3.0, y0, 15.55); table(D, 1.3, 0.6, 0.75, M.oak, M.black); D.cyl(M.black, 0.45, 0, 0.015, 0.75, 1.15, 6); D.cyl(M.lampWarm, 0.45, -0.05, 0.08, 1.1, 1.18, 10, 0.05); flowers(D, -0.4, 0.75, 0, [M.flowerYellow], 0.7); }
+  { const C = new Frame(grp, 3.0, y0, 14.95, Math.PI); chair(C, M.black, M.sofaDark); }
   plant(W, 0.5, 0, 15.5, 0.9);
   ceilingLight(W, 2.4, 14.0, 0, 0.3);
 }
