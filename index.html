@@ -1251,6 +1251,16 @@ if (RECORD) {
     }
     return comp.toDataURL('image/jpeg', 0.92);
   };
+  window.__shot = (x, y, z, lx, ly, lz, label) => {
+    camera.position.set(x, y, z); camera.lookAt(lx, ly, lz); draw(); cx.drawImage(renderer.domElement, 0, 0);
+    if (label) {
+      cx.font = '700 34px Tajawal, sans-serif'; cx.direction = 'rtl'; cx.textAlign = 'center';
+      const w = cx.measureText(label).width + 56, X = W0 / 2, Y = H0 - 58;
+      cx.fillStyle = 'rgba(250,249,246,0.86)'; cx.beginPath(); cx.roundRect(X - w / 2, Y - 34, w, 54, 12); cx.fill();
+      cx.fillStyle = '#1f2a27'; cx.fillText(label, X, Y + 4);
+    }
+    return comp.toDataURL('image/jpeg', 0.92);
+  };
   window.__dbg = { draw, renderer, camera, scene, tourAt, applyCam, sun };
   window.__ready = true;
 } else {
