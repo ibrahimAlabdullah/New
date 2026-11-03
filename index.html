@@ -62,6 +62,8 @@ button[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg)
   background: var(--panel); border: 1px solid var(--panel-line); border-radius: 10px; padding: 8px 12px; max-width: 260px; line-height: 1.6;
 }
 @media (max-width: 760px) { .help { display: none; } .brand { display: none; } button { padding: 7px 9px; font-size: 13px; } }
+.credit { position: fixed; z-index: 4; left: max(16px, env(safe-area-inset-left, 0px)); top: calc(env(safe-area-inset-top, 0px) + 64px); font-size: 11px; color: var(--muted); direction: rtl; max-width: 260px; opacity: 0.8; }
+@media (max-width: 760px) { .credit { display: none; } }
 .loading { position: fixed; inset: 0; display: grid; place-items: center; z-index: 9; background: var(--bg); font-size: 18px; direction: rtl; }
 .stick { position: fixed; z-index: 6; width: 120px; height: 120px; border-radius: 50%; border: 2px solid var(--panel-line); background: var(--panel); opacity: 0.85;
   left: max(24px, env(safe-area-inset-left, 0px)); bottom: calc(env(safe-area-inset-bottom, 0px) + 90px); touch-action: none; }
@@ -77,6 +79,7 @@ body.record .rail, body.record .help, body.record .plate, body.record .stick { d
     <button id="bTour" aria-pressed="false">▶ الجولة التلقائية</button>
     <button id="bWalk" aria-pressed="true">تجوّل حر</button>
     <button id="bTop" aria-pressed="false">منظر علوي</button>
+    <button id="bQ" aria-pressed="true">جودة عالية</button>
   </div>
   <div class="group" role="group" aria-label="الانتقال">
     <button id="gOut">الواجهة</button>
@@ -89,6 +92,7 @@ body.record .rail, body.record .help, body.record .plate, body.record .stick { d
   </div>
 </div>
 <div class="plate" id="plate"><b id="roomName">الواجهة</b><span id="roomSub">اسحب للالتفات · W A S D أو الأسهم للمشي</span></div>
+<div class="credit" id="credit">الأثاث والخامات: Khronos glTF Sample Assets (CC-BY 4.0 / CC0)، three.js، Poly Haven (CC0)</div>
 <div class="help" id="help">اسحب بالماوس للالتفات، وامشِ بالأسهم أو W A S D. اصعد الدرج بالمشي عليه. على الجوال: العصا للمشي والسحب للالتفات.</div>
 <div class="stick" id="stick" hidden><i id="knob"></i></div>
 
@@ -103,6 +107,13 @@ import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { EXRLoader } from 'three/addons/loaders/EXRLoader.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 const RECORD = new URLSearchParams(location.search).has('record');
 if (RECORD) document.body.classList.add('record');
@@ -202,27 +213,68 @@ function artTex(seed, palette) {
   };
 }
 
+// خريطة نتوء (normal map) من خريطة ارتفاع مرسومة: تعطي الجص والفواصل والقماش ملمساً حقيقياً
+function normalTex(size, drawHeight, meters, strength = 2) {
+  const c = document.createElement('canvas'); c.width = c.height = size; const g = c.getContext('2d');
+  drawHeight(g, size);
+  const h = g.getImageData(0, 0, size, size).data, out = g.createImageData(size, size), o = out.data;
+  const H = (x, y) => h[(((y + size) % size) * size + ((x + size) % size)) * 4] / 255;
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    const dx = (H(x + 1, y) - H(x - 1, y)) * strength, dy = (H(x, y + 1) - H(x, y - 1)) * strength;
+    const l = Math.hypot(dx, dy, 1), i = (y * size + x) * 4;
+    o[i] = (-dx / l * 0.5 + 0.5) * 255; o[i + 1] = (dy / l * 0.5 + 0.5) * 255; o[i + 2] = (1 / l * 0.5 + 0.5) * 255; o[i + 3] = 255;
+  }
+  g.putImageData(out, 0, 0);
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8;
+  if (meters) t.repeat.set(1 / meters, 1 / meters);
+  return t;
+}
+const groutH = (n) => (g, s) => { g.fillStyle = '#fff'; g.fillRect(0, 0, s, s); g.strokeStyle = '#000'; g.lineWidth = Math.max(3, s / 160); const st = s / n; for (let i = 0; i <= n; i++) { g.beginPath(); g.moveTo(i * st, 0); g.lineTo(i * st, s); g.stroke(); g.beginPath(); g.moveTo(0, i * st); g.lineTo(s, i * st); g.stroke(); } };
+const noiseH = (seed, amt = 1, blur = 2) => (g, s) => { const r = rng(seed); g.fillStyle = '#808080'; g.fillRect(0, 0, s, s); for (let k = 0; k < s * s / 3; k++) { const v = 128 + (r() - 0.5) * 255 * amt; g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(r() * s, r() * s, blur, blur); } };
+const weaveH = (n) => (g, s) => { const st = s / n; for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) { const v = (x + y) % 2 ? 200 : 70; g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(x * st, y * st, st, st); } };
+
+// صور حقيقية: خشب، عشب، وإضاءة بيئية HDRI
+const IMG = {};
+// الملفات الثنائية (نماذج GLB وإضاءة EXR) محفوظة نصاً بترميز base64
+async function loadBin(path) {
+  const r = await fetch(path + '.txt'); if (!r.ok) throw new Error('تعذّر تحميل ' + path);
+  const bin = atob((await r.text()).trim()), u = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+  return u.buffer;
+}
+async function loadImages() {
+  const L = new THREE.TextureLoader();
+  const get = async (k, f, srgb) => { const t = await L.loadAsync('assets/textures/' + f); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; if (srgb) t.colorSpace = THREE.SRGBColorSpace; IMG[k] = t; };
+  await Promise.all([get('wood', 'hardwood2_diffuse.jpg', true), get('woodBump', 'hardwood2_bump.jpg'), get('woodRough', 'hardwood2_roughness.jpg'), get('grass', 'grasslight-big.jpg', true), get('grassN', 'grasslight-big-nm.jpg')]);
+}
+function woodMat(tint, meters = 1.2, rough = 1) {
+  const rep = (t) => { const c = t.clone(); c.repeat.set(1 / meters, 1 / meters); c.needsUpdate = true; return c; };
+  const m = new THREE.MeshStandardMaterial({ color: tint, map: rep(IMG.wood), bumpMap: rep(IMG.woodBump), bumpScale: 1.2, roughnessMap: rep(IMG.woodRough), roughness: rough });
+  m.userData.worldUV = true; return m;
+}
+
 /* ================= المواد ================= */
 const M = {};
 function std(color, rough = 0.85, metal = 0, extra = {}) { return new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal, ...extra }); }
 function texMat(tex, rough = 0.8, extra = {}) { const m = new THREE.MeshStandardMaterial({ map: tex, roughness: rough, ...extra }); m.userData.worldUV = true; return m; }
 function buildMaterials() {
-  M.wall = std('#f2eee7', 0.95);
+  M.wall = new THREE.MeshStandardMaterial({ color: '#f1ede6', roughness: 0.92, normalMap: normalTex(256, noiseH(5, 0.5, 3), 0.8, 1.2), normalScale: new THREE.Vector2(0.35, 0.35) }); M.wall.userData.worldUV = true;
   M.ceil = std('#fbfaf7', 0.95);
-  M.facade = texMat(canvasTex(256, noiseTex('#e7d8bf', 0.05, 3), 1.0), 0.95);
+  M.facade = texMat(canvasTex(512, noiseTex('#e7d8bf', 0.06, 3), 1.0), 0.95); M.facade.normalMap = normalTex(512, noiseH(6, 0.9, 2), 1.0, 2.5); M.facade.normalScale.set(0.6, 0.6);
   M.trim = std('#f7f4ee', 0.8);
   M.plinth = texMat(canvasTex(256, tileTex('#b8a68a', '#9e8d73', 2, 4, 14, 0.2), 1.2), 0.95);
-  M.floor = texMat(canvasTex(512, tileTex('#e6e0d6', '#cbc3b5', 2, 11, 9), 1.2), 0.35);
-  M.floorUp = texMat(canvasTex(512, tileTex('#e3ddd2', '#c8c0b2', 2, 12, 9), 1.2), 0.35);
-  M.wet = texMat(canvasTex(512, tileTex('#c3c8cb', '#a4aaae', 4, 13, 8), 1.2), 0.4);
-  M.bathWall = texMat(canvasTex(512, tileTex('#eef1f1', '#cfd6d8', 4, 14, 5, 0.01), 1.2), 0.3);
-  M.paving = texMat(canvasTex(512, tileTex('#cdbfa5', '#ad9f86', 3, 15, 18, 0.15), 1.2), 0.9);
+  M.floor = texMat(canvasTex(512, tileTex('#e6e0d6', '#cbc3b5', 2, 11, 9), 1.2), 0.22); M.floor.normalMap = normalTex(512, groutH(2), 1.2, 3); M.floor.normalScale.set(0.5, 0.5);
+  M.floorUp = texMat(canvasTex(512, tileTex('#e3ddd2', '#c8c0b2', 2, 12, 9), 1.2), 0.22); M.floorUp.normalMap = normalTex(512, groutH(2), 1.2, 3); M.floorUp.normalScale.set(0.5, 0.5);
+  M.wet = texMat(canvasTex(512, tileTex('#c3c8cb', '#a4aaae', 4, 13, 8), 1.2), 0.3); M.wet.normalMap = normalTex(512, groutH(4), 1.2, 3); M.wet.normalScale.set(0.5, 0.5);
+  M.bathWall = texMat(canvasTex(512, tileTex('#eef1f1', '#cfd6d8', 4, 14, 5, 0.01), 1.2), 0.15); M.bathWall.normalMap = normalTex(512, groutH(4), 1.2, 3); M.bathWall.normalScale.set(0.5, 0.5);
+  M.paving = texMat(canvasTex(512, tileTex('#cdbfa5', '#ad9f86', 3, 15, 18, 0.15), 1.2), 0.9); M.paving.normalMap = normalTex(512, groutH(3), 1.2, 3);
   M.marble = texMat(canvasTex(512, marbleTex('#f4f3f0', '#8e8a85', 21), 1.6), 0.18);
   M.stair = texMat(canvasTex(512, marbleTex('#ece7df', '#a9a197', 22), 1.4), 0.25);
-  M.walnut = texMat(canvasTex(512, woodTex('#7b5438', '#3b2414', 31), 1.0), 0.6);
-  M.oak = texMat(canvasTex(512, woodTex('#c79f73', '#7a5530', 32), 1.0), 0.6);
-  M.slats = texMat(canvasTex(512, woodTex('#a77a52', '#5a3a20', 33, 12), 1.0), 0.6);
-  M.grass = texMat(canvasTex(256, noiseTex('#6f8f4e', 0.12, 41), 2.0), 1);
+  M.walnut = woodMat('#8b6247', 0.55);
+  M.oak = woodMat('#ffffff', 0.6);
+  M.slats = woodMat('#c9a27e', 0.6);
+  M.grass = new THREE.MeshStandardMaterial({ map: IMG.grass.clone(), normalMap: IMG.grassN.clone(), roughness: 1, color: '#c8d8b0' });
+  M.grass.map.repeat.set(1 / 6, 1 / 6); M.grass.normalMap.repeat.set(1 / 6, 1 / 6); M.grass.userData.worldUV = true;
   M.asphalt = texMat(canvasTex(256, noiseTex('#5a5d60', 0.12, 42), 2.0), 0.95);
   M.sidewalk = texMat(canvasTex(512, tileTex('#c9c4ba', '#a9a399', 2, 43, 10, 0.1), 1.0), 0.95);
   M.glass = new THREE.MeshPhysicalMaterial({ color: '#bfd8e2', roughness: 0.05, metalness: 0, transparent: true, opacity: 0.22, depthWrite: false, envMapIntensity: 1.2 });
@@ -238,6 +290,7 @@ function buildMaterials() {
   M.paintRose = std('#d9c2b6', 0.95);
   M.paintDining = std('#c7b39a', 0.95);
   M.sofa = texMat(canvasTex(256, noiseTex('#b8b4ac', 0.08, 51), 0.5), 1);
+
   M.sofaDark = texMat(canvasTex(256, noiseTex('#5f6b70', 0.08, 52), 0.5), 1);
   M.mustard = std('#cf9f3c', 1);
   M.teal = std('#2f6e70', 1);
@@ -275,6 +328,8 @@ function buildMaterials() {
   M.fruit = std('#e08a2c', 0.6);
   M.fruit2 = std('#7fae3c', 0.6);
   M.fish = std('#f08a24', 0.5);
+  const weave = normalTex(256, weaveH(64), 0.25, 1.5);
+  for (const k of ['sofa', 'sofaDark', 'majlisSeat', 'majlisBack', 'headboard', 'headboard2', 'linen', 'bedThrow', 'bedThrow2']) { M[k].normalMap = weave; M[k].normalScale = new THREE.Vector2(0.4, 0.4); M[k].userData.worldUV = true; }
 }
 
 /* ================= الباني: يجمع الأشكال ثم يدمجها حسب المادة ================= */
@@ -320,7 +375,10 @@ class Frame {
   }
   add(mat, geom) { geom.applyMatrix4(this.M); B.add(this.g, mat, geom); return geom; }
   box(mat, x1, y1, z1, x2, y2, z2) {
-    const g = new THREE.BoxGeometry(Math.abs(x2 - x1), Math.abs(y2 - y1), Math.abs(z2 - z1));
+    const w = Math.abs(x2 - x1), h = Math.abs(y2 - y1), d = Math.abs(z2 - z1), m = Math.min(w, h, d);
+    const g = (this.g === groups.f0 || this.g === groups.f1) && m > 0.04 && Math.max(w, h, d) < 4
+      ? new RoundedBoxGeometry(w, h, d, 2, Math.min(0.035, m * 0.3))
+      : new THREE.BoxGeometry(w, h, d);
     g.translate((x1 + x2) / 2, (y1 + y2) / 2, (z1 + z2) / 2); return this.add(mat, g);
   }
   cyl(mat, x, z, r, y1, y2, seg = 18, rTop) {
@@ -653,7 +711,7 @@ function buildVeranda(grp) {
   // جلسة خارجية في البرندا الأمامية
   const S = new Frame(grp, 3.0, y, -1.0);
   S.box(M.oak, -0.9, 0.38, -0.35, 0.9, 0.42, 0.35); S.box(M.alu, -0.85, 0, -0.3, -0.8, 0.38, 0.3); S.box(M.alu, 0.8, 0, -0.3, 0.85, 0.38, 0.3);
-  for (const dx of [-1.6, 1.6]) { const C = new Frame(grp, 3.0 + dx, y, -1.0, dx > 0 ? Math.PI / 2 : -Math.PI / 2); armchair(C, M.sofa); }
+  for (const dx of [-1.6, 1.6]) placeModel(grp, 'ChairDamaskPurplegold', 3.0 + dx, y, -1.0, dx > 0 ? -Math.PI / 2 : Math.PI / 2, 1.05);
   plant(F, 12.5, y, -1.3, 1.1); plant(F, 9.5, y, -1.5, 0.8); plant(F, 5.5, y, -1.5, 0.8);
 }
 function buildFacadeDetails(grp, level) {
@@ -671,13 +729,19 @@ function buildFacadeDetails(grp, level) {
 }
 
 /* ================= الأثاث ================= */
+const PLACED = [];
+const isInterior = (F) => F.g === groups.f0 || F.g === groups.f1 || F.g === groups.veranda;
+function worldPt(F, x, y, z) { return new THREE.Vector3(x, y, z).applyMatrix4(F.M); }
+function placeModel(group, name, x, y, z, rot = 0, scale = 1) { PLACED.push({ group, name, x, y, z, rot, scale }); }
 function plant(F, x, y, z, s = 1) {
+  if (isInterior(F)) { const p = worldPt(F, x, y, z); placeModel(F.g, 'DiffuseTransmissionPlant', p.x, p.y, p.z, (x * 7 + z * 3) % 6.28, 1.25 * s); return; }
   F.cyl(M.potWhite, x, z, 0.2 * s, y, y + 0.45 * s, 14, 0.24 * s);
   F.cyl(M.trunk, x, z, 0.03 * s, y + 0.4 * s, y + 0.9 * s, 6);
   F.sphere(M.leaf, x, y + 1.05 * s, z, 0.38 * s, 1, 1.2, 1, 10);
   F.sphere(M.leafDark, x + 0.15 * s, y + 0.85 * s, z + 0.1 * s, 0.26 * s, 1, 1, 1, 8);
 }
 function flowers(F, x, y, z, mats = [M.flowerRed, M.flowerPink, M.flowerYellow, M.flowerWhite], s = 1) {
+  if (isInterior(F)) { const p = worldPt(F, x, y, z); placeModel(F.g, 'GlassVaseFlowers', p.x, p.y, p.z, 0, 2.4 * s); return; }
   F.cyl(M.glass, x, z, 0.08 * s, y, y + 0.28 * s, 12, 0.06 * s);
   const r = rng(Math.round(x * 100 + z * 7));
   for (let i = 0; i < 9; i++) {
@@ -762,9 +826,10 @@ function furnish(grp, level) {
   W.box(M.walnut, 8.8, 0.15, 1.6, 9.25, 0.55, 4.2);        // وحدة تلفاز
   W.box(M.screen, 8.81, 1.05, 2.15, 8.86, 1.9, 3.65);
   W.box(M.black, 8.8, 1.02, 2.12, 8.81, 1.93, 3.68);
-  { const S = new Frame(grp, 13.35, y0, 3.0, Math.PI / 2); sofa(S, 3.0, M.sofa, [M.mustard, M.teal]); }
-  { const S = new Frame(grp, 11.75, y0, 5.35, 0); sofa(S, 2.2, M.sofa, [M.teal, M.mustard]); }
-  { const C = new Frame(grp, 10.2, y0, 1.1, -2.6); armchair(C, M.sofaDark); }
+  placeModel(grp, 'GlamVelvetSofa', 13.3, y0, 3.1, -Math.PI / 2, 1.1);
+  placeModel(grp, 'SheenChair', 11.0, y0, 5.25, Math.PI, 1.05);
+  placeModel(grp, 'SheenChair', 12.2, y0, 5.25, Math.PI, 1.05);
+  placeModel(grp, 'SheenChair', 10.15, y0, 1.15, 0.55, 1.05);
   rug(W, M.rugLiving, 9.9, 1.6, 12.8, 4.7);
   { const T = new Frame(grp, 11.4, y0, 3.1); table(T, 1.2, 0.7, 0.4, M.marble, M.black); flowers(T, 0, 0.4, 0, undefined, 0.8); }
   W.cyl(M.walnut, 13.4, 5.3, 0.22, 0, 0.5, 18); W.cyl(M.black, 13.4, 0.6, 0.02, 0, 1.6, 6); W.cyl(M.lampWarm, 13.4, 0.6, 0.18, 1.45, 1.75, 14, 0.12);
@@ -777,7 +842,7 @@ function furnish(grp, level) {
   W.box(M.mirror, 6.68, 1.1, 4.8, 6.69, 2.2, 5.8); W.box(M.gold, 6.675, 1.07, 4.77, 6.685, 2.23, 5.83);
   rug(W, M.rugHall, 6.9, 2.6, 8.4, 4.2);
   // جلسة عائلية في الصالة
-  { const S = new Frame(grp, 5.4, y0, 9.75, -Math.PI / 2); sofa(S, 2.0, M.sofaDark, [M.mustard, M.flowerWhite]); }
+  placeModel(grp, 'SheenWoodLeatherSofa', 5.32, y0, 9.75, Math.PI / 2, 0.8);
   { const T = new Frame(grp, 6.4, y0, 9.75); table(T, 0.6, 1.0, 0.42, M.walnut, M.black); }
   rug(W, M.rugLiving, 5.0, 8.85, 7.0, 10.65);
   frameArtX(W, M.art2, 9.1, 1.4, 10.4, 2.2, 4.925, 1);
@@ -944,21 +1009,26 @@ const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffe
 renderer.setPixelRatio(RECORD ? 1 : Math.min(devicePixelRatio, 2));
 renderer.setSize(W0, H0);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.05;
+renderer.toneMappingExposure = 0.92;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 view.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-const sky = canvasTex(512, (g, s) => { const gr = g.createLinearGradient(0, 0, 0, s); gr.addColorStop(0, '#7fb0dc'); gr.addColorStop(0.48, '#cfe3f1'); gr.addColorStop(0.52, '#e9efe9'); gr.addColorStop(1, '#a9b49a'); g.fillStyle = gr; g.fillRect(0, 0, s, s); });
-sky.mapping = THREE.EquirectangularReflectionMapping;
-scene.background = sky;
+const skyOld = canvasTex(512, (g, s) => { const gr = g.createLinearGradient(0, 0, 0, s); gr.addColorStop(0, '#7fb0dc'); gr.addColorStop(0.48, '#cfe3f1'); gr.addColorStop(0.52, '#e9efe9'); gr.addColorStop(1, '#a9b49a'); g.fillStyle = gr; g.fillRect(0, 0, s, s); });
+skyOld.mapping = THREE.EquirectangularReflectionMapping;
+scene.background = skyOld;
 const pmrem = new THREE.PMREMGenerator(renderer);
 // خريطة البيئة للمواد اللامعة فقط (رخام، كروم، زجاج) لأنها مكلفة على الأجهزة الضعيفة
-const envTex = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-scene.add(new THREE.HemisphereLight('#f4f8ff', '#c9bba0', 1.55));
-scene.add(new THREE.AmbientLight('#fff8ef', 0.55));
-const fill = new THREE.DirectionalLight('#eef3ff', 0.55); fill.position.set(12, 10, 30); scene.add(fill);
+// إضاءة بيئية حقيقية (HDRI) تعطي المواد انعكاسات وظلالاً ناعمة
+const exr = new EXRLoader();
+const exrTex = async (f) => { const d = exr.parse(await loadBin(f)); const t = new THREE.DataTexture(d.data, d.width, d.height, d.format, d.type); t.flipY = false; t.minFilter = t.magFilter = THREE.LinearFilter; t.generateMipmaps = false; t.needsUpdate = true; return t; };
+const [hdrIn, hdrSky] = await Promise.all([exrTex('assets/hdri/apartment.exr'), exrTex('assets/hdri/sky.exr')]);
+hdrIn.mapping = hdrSky.mapping = THREE.EquirectangularReflectionMapping;
+scene.environment = pmrem.fromEquirectangular(hdrIn).texture;
+scene.environmentIntensity = 0.85;
+scene.background = hdrSky; scene.backgroundIntensity = 0.9; scene.backgroundBlurriness = 0.02;
+scene.add(new THREE.HemisphereLight('#f4f8ff', '#c9bba0', 0.55));
 const sun = new THREE.DirectionalLight('#fff3df', 2.6);
 sun.position.set(-14, 26, -20);
 sun.target.position.set(7, 0, 8);
@@ -972,6 +1042,8 @@ renderer.shadowMap.autoUpdate = false; renderer.shadowMap.needsUpdate = true; //
 const groups = { site: new THREE.Group(), g0: new THREE.Group(), f0: new THREE.Group(), slab1: new THREE.Group(), g1: new THREE.Group(), f1: new THREE.Group(), veranda: new THREE.Group(), roof: new THREE.Group() };
 for (const g of Object.values(groups)) scene.add(g);
 
+document.getElementById('loading').textContent = 'جاري تحميل الخامات…';
+await loadImages();
 buildMaterials();
 buildSite(groups.site);
 for (const level of [0, 1]) {
@@ -986,7 +1058,18 @@ buildUpperLandingRail(groups.g1);
 buildVeranda(groups.veranda);
 buildRoof(groups.roof);
 B.finalize();
-for (const m of Object.values(M)) if (m.isMeshStandardMaterial && (m.roughness < 0.45 || m.metalness > 0.5)) { m.envMap = envTex; m.envMapIntensity = m.metalness > 0.5 ? 1.0 : 0.7; }
+document.getElementById('loading').textContent = 'جاري تحميل الأثاث…';
+{
+  const names = [...new Set(PLACED.map(p => p.name))], src = {};
+  const L = new GLTFLoader();
+  await Promise.all(names.map(async n => { src[n] = (await L.parseAsync(await loadBin(`assets/models/${n}.glb`), '')).scene; src[n].traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } }); }));
+  for (const p of PLACED) {
+    const o = src[p.name].clone(); o.scale.setScalar(p.scale); o.rotation.y = p.rot; o.updateMatrixWorld(true);
+    const b = new THREE.Box3().setFromObject(o);
+    o.position.set(p.x - (b.min.x + b.max.x) / 2, p.y - b.min.y, p.z - (b.min.z + b.max.z) / 2);
+    p.group.add(o);
+  }
+}
 
 /* ================= الكاميرا والمشي ================= */
 const camera = new THREE.PerspectiveCamera(RECORD ? 68 : 70, W0 / H0, 0.05, 400);
@@ -1216,21 +1299,24 @@ function frame() {
   }
   draw();
 }
-// تمرير عمق مسبق: يرسم العمق أولاً ثم يلوّن السطح الأقرب فقط (يقلل التلوين المكرر داخل البيت)
-const depthMat = new THREE.MeshBasicMaterial({ colorWrite: false });
-const transparentMeshes = [];
-scene.traverse(o => { if (o.isMesh && o.material.transparent) transparentMeshes.push(o); });
-function draw() {
-  renderer.autoClear = false; renderer.clear();
-  const bg = scene.background; scene.background = null; scene.overrideMaterial = depthMat;
-  for (const m of transparentMeshes) m.visible = false;
-  renderer.render(scene, camera);
-  for (const m of transparentMeshes) m.visible = true;
-  scene.overrideMaterial = null; scene.background = bg;
-  renderer.render(scene, camera);
+// ظلال الزوايا والتلامس (Ambient Occlusion) لمظهر أقرب للواقع
+let hq = !matchMedia('(pointer: coarse)').matches;
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const ao = new GTAOPass(scene, camera, W0, H0);
+ao.updateGtaoMaterial({ radius: 0.5, distanceExponent: 1.5, thickness: 1.0, scale: 1.2, samples: 16 });
+ao.blendIntensity = 1.0;
+composer.addPass(ao);
+composer.addPass(new OutputPass());
+function draw() { if (hq) composer.render(); else renderer.render(scene, camera); }
+function setQuality(on) {
+  hq = on; $('bQ').setAttribute('aria-pressed', on); $('bQ').textContent = on ? 'جودة عالية' : 'جودة عادية';
+  renderer.setPixelRatio(RECORD ? 1 : Math.min(devicePixelRatio, on ? 2 : 1.25)); resize(); renderer.shadowMap.needsUpdate = true;
 }
-function resize() { if (RECORD) return; const w = view.clientWidth, h = view.clientHeight; renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+function resize() { if (RECORD) return; const w = view.clientWidth, h = view.clientHeight; renderer.setSize(w, h); composer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix(); }
 addEventListener('resize', resize);
+$('bQ').onclick = () => setQuality(!hq);
+setQuality(hq);
 setMode('walk');
 applyCam(player.x, player.foot + EYE, player.z, player.yaw, player.pitch);
 $('loading').remove();

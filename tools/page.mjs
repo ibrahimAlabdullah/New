@@ -30,7 +30,12 @@ export async function openHouse({ width = 1280, height = 720, record = true } = 
   });
   const html = readFileSync(path.join(root, 'index.html'), 'utf8');
   const doc = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body>${html}</body></html>`;
-  await page.route('https://house.local/**', (route) => route.fulfill({ body: doc, contentType: 'text/html' }));
+  const types = { glb: 'model/gltf-binary', jpg: 'image/jpeg', png: 'image/png', exr: 'application/octet-stream', webp: 'image/webp', txt: 'text/plain' };
+  await page.route('https://house.local/**', (route) => {
+    const p = decodeURIComponent(new URL(route.request().url()).pathname);
+    if (p.startsWith('/assets/')) return route.fulfill({ body: readFileSync(path.join(root, p)), contentType: types[p.split('.').pop()] || 'application/octet-stream' });
+    return route.fulfill({ body: doc, contentType: 'text/html' });
+  });
   await page.goto('https://house.local/index.html' + (record ? '?record=1' : ''));
   return { browser, page };
 }
