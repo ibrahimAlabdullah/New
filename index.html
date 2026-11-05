@@ -1065,7 +1065,11 @@ B.finalize();
 (async () => {
   const names = [...new Set(PLACED.map(p => p.name))], src = {};
   const L = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
-  await Promise.all(names.map(async n => { src[n] = (await L.parseAsync(await loadBin(`assets/models/${n}.glb`), '')).scene; src[n].traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } }); }));
+  // اللابتوب يحمّل النسخ الأصلية عالية الدقة، والجوال النسخ المخففة
+  const dir = MOBILE ? 'assets/models/' : 'assets/models/hq/';
+  await Promise.all(names.map(async n => { src[n] = (await L.parseAsync(await loadBin(dir + n + '.glb'), '')).scene;
+    const lights = []; src[n].traverse(o => { if (o.isLight) lights.push(o); }); lights.forEach(o => o.removeFromParent()); // نموذج النبتة يحمل أضواء مضمّنة ثقيلة
+    src[n].traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } }); }));
   for (const p of PLACED) {
     const o = src[p.name].clone(); o.scale.setScalar(p.scale); o.rotation.y = p.rot; o.updateMatrixWorld(true);
     const b = new THREE.Box3().setFromObject(o);
