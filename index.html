@@ -108,6 +108,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { EXRLoader } from 'three/addons/loaders/EXRLoader.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -1004,14 +1005,16 @@ function bedroom2(grp, y0, up) {
 
 /* ================= المشهد ================= */
 const view = document.getElementById('view');
+// الأجهزة اللمسية والشاشات الصغيرة: إعدادات أخف
+const MOBILE = !RECORD && (matchMedia('(pointer: coarse)').matches || Math.min(innerWidth, innerHeight) < 600);
 const W0 = RECORD ? 1280 : view.clientWidth, H0 = RECORD ? 720 : view.clientHeight;
-const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: RECORD });
-renderer.setPixelRatio(RECORD ? 1 : Math.min(devicePixelRatio, 2));
+const renderer = new THREE.WebGLRenderer({ antialias: !MOBILE, preserveDrawingBuffer: RECORD, powerPreference: 'high-performance' });
+renderer.setPixelRatio(RECORD ? 1 : Math.min(devicePixelRatio, MOBILE ? 1 : 2));
 renderer.setSize(W0, H0);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.92;
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = MOBILE ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
 view.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
@@ -1033,7 +1036,7 @@ const sun = new THREE.DirectionalLight('#fff3df', 2.6);
 sun.position.set(-14, 26, -20);
 sun.target.position.set(7, 0, 8);
 sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.mapSize.set(MOBILE ? 1024 : 2048, MOBILE ? 1024 : 2048);
 Object.assign(sun.shadow.camera, { left: -16, right: 16, top: 16, bottom: -16, near: 1, far: 80 });
 sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
 scene.add(sun, sun.target);
@@ -1058,10 +1061,10 @@ buildUpperLandingRail(groups.g1);
 buildVeranda(groups.veranda);
 buildRoof(groups.roof);
 B.finalize();
-document.getElementById('loading').textContent = 'جاري تحميل الأثاث…';
-{
+// الأثاث يُحمّل في الخلفية بعد ظهور البيت مباشرة
+(async () => {
   const names = [...new Set(PLACED.map(p => p.name))], src = {};
-  const L = new GLTFLoader();
+  const L = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
   await Promise.all(names.map(async n => { src[n] = (await L.parseAsync(await loadBin(`assets/models/${n}.glb`), '')).scene; src[n].traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } }); }));
   for (const p of PLACED) {
     const o = src[p.name].clone(); o.scale.setScalar(p.scale); o.rotation.y = p.rot; o.updateMatrixWorld(true);
@@ -1069,7 +1072,9 @@ document.getElementById('loading').textContent = 'جاري تحميل الأثا
     o.position.set(p.x - (b.min.x + b.max.x) / 2, p.y - b.min.y, p.z - (b.min.z + b.max.z) / 2);
     p.group.add(o);
   }
-}
+  renderer.shadowMap.needsUpdate = true;
+  window.__furniture = true;
+})().catch(e => console.error(e));
 
 /* ================= الكاميرا والمشي ================= */
 const camera = new THREE.PerspectiveCamera(RECORD ? 68 : 70, W0 / H0, 0.05, 400);
@@ -1297,10 +1302,18 @@ function frame() {
   } else {
     orbit.update(); setLabel(topFloor ? 'الطابق الأول من الأعلى' : 'الطابق الأرضي من الأعلى', 'اسحب للتدوير · مرّر للتكبير');
   }
+  if (mode !== 'top') {
+    // داخل البيت نرسم أثاث الطابق الحالي فقط
+    const c = camera.position, inside = c.x > 0 && c.x < 14 && c.z > 0 && c.z < 16;
+    const up = c.y > LV[1] + 0.6;
+    groups.f0.visible = !inside || !up;
+    groups.f1.visible = !inside || up;
+    groups.veranda.visible = !inside || up;
+  }
   draw();
 }
 // ظلال الزوايا والتلامس (Ambient Occlusion) لمظهر أقرب للواقع
-let hq = !matchMedia('(pointer: coarse)').matches;
+let hq = !MOBILE;
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
 const ao = new GTAOPass(scene, camera, W0, H0);
@@ -1311,7 +1324,7 @@ composer.addPass(new OutputPass());
 function draw() { if (hq) composer.render(); else renderer.render(scene, camera); }
 function setQuality(on) {
   hq = on; $('bQ').setAttribute('aria-pressed', on); $('bQ').textContent = on ? 'جودة عالية' : 'جودة عادية';
-  renderer.setPixelRatio(RECORD ? 1 : Math.min(devicePixelRatio, on ? 2 : 1.25)); resize(); renderer.shadowMap.needsUpdate = true;
+  renderer.setPixelRatio(RECORD ? 1 : Math.min(devicePixelRatio, on ? 2 : 1)); resize(); renderer.shadowMap.needsUpdate = true;
 }
 function resize() { if (RECORD) return; const w = view.clientWidth, h = view.clientHeight; renderer.setSize(w, h); composer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix(); }
 addEventListener('resize', resize);
