@@ -1006,7 +1006,7 @@ function bedroom2(grp, y0, up) {
 /* ================= المشهد ================= */
 const view = document.getElementById('view');
 // الأجهزة اللمسية والشاشات الصغيرة: إعدادات أخف
-const MOBILE = !RECORD && (matchMedia('(pointer: coarse)').matches || Math.min(innerWidth, innerHeight) < 600);
+const MOBILE = !RECORD && matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches;
 const W0 = RECORD ? 1280 : view.clientWidth, H0 = RECORD ? 720 : view.clientHeight;
 const renderer = new THREE.WebGLRenderer({ antialias: !MOBILE, preserveDrawingBuffer: RECORD, powerPreference: 'high-performance' });
 renderer.setPixelRatio(RECORD ? 1 : Math.min(devicePixelRatio, MOBILE ? 1 : 2));
