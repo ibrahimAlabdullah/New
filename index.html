@@ -662,8 +662,7 @@ function buildSite(grp) {
   // أحواض زرع على جانبي الدرج
   for (const [x1, x2] of [[3.4, 5.25], [8.55, 10.4]]) {
     F.box(M.plinth, x1, 0, -2.9, x2, 0.5, -2.0);
-    F.box(M.grass, x1 + 0.08, 0.5, -2.82, x2 - 0.08, 0.52, -2.08);
-    for (let x = x1 + 0.3; x < x2 - 0.1; x += 0.45) F.sphere(M.leafDark, x, 0.68, -2.45, 0.24, 1, 0.8, 1, 8);
+    flowerBed(F, x1 + 0.1, -2.8, x2 - 0.1, -2.1, 0.36, 40, Math.round(x1 * 10), [0, 1, 2]);
   }
   // سور منخفض حول الفناء مع فتحة الدرج
   const wallH = 0.6, y = G0;
@@ -684,14 +683,22 @@ function buildSite(grp) {
   }
   // نباتات في الفناء
   for (const [x, z] of [[-0.5, -1.0], [14.5, -1.0], [-0.5, 16.5], [14.5, 16.5]]) plant(F, x, G0, z, 1.0);
-  // أشجار في الحديقة
-  const r = rng(99);
-  for (const [x, z] of [[-6, -3], [20, -2], [-8, 8], [22, 9], [-6, 20], [21, 22], [-12, -5], [27, -4], [30, 14], [-14, 14]]) {
-    const s = 0.8 + r() * 0.6;
-    F.cyl(M.trunk, x, z, 0.14 * s, 0, 2.4 * s, 8);
-    F.sphere(M.leaf, x, 3.2 * s, z, 1.5 * s, 1, 1.1, 1, 10);
-    F.sphere(M.leafDark, x + 0.6 * s, 2.7 * s, z - 0.4 * s, 1.0 * s, 1, 1, 1, 8);
-  }
+  // حديقة أمامية: أحواض زهور، نخيل، أسيجة شجيرات، فوانيس
+  flowerBed(F, -0.9, -2.95, 3.25, -2.15, 0, 30, 101);
+  flowerBed(F, 10.55, -2.95, 14.9, -2.15, 0, 30, 102);
+  flowerBed(F, 4.55, -5.9, 5.15, -3.65, 0, 34, 103, [1, 2, 4]);
+  flowerBed(F, 8.65, -5.9, 9.25, -3.65, 0, 34, 104, [1, 2, 4]);
+  flowerBed(F, 0.2, -5.4, 2.8, -4.0, 0, 22, 105, [0, 3, 5]);
+  flowerBed(F, 11.2, -5.4, 13.8, -4.0, 0, 22, 106, [0, 3, 5]);
+  palm(F, 1.5, -4.7, 5.2, 11, 0.16); palm(F, 12.5, -4.7, 5.6, 12, 0.16);
+  palm(F, -3.0, 3, 6.0, 13); palm(F, 17.0, 3, 5.8, 14); palm(F, -3.0, 13, 5.5, 15); palm(F, 17.0, 13, 6.2, 16);
+  const hedge = (x1, z1, x2, z2, h = 0.75) => rbox(F, DX.hedgeSolid, x1, 0, z1, x2, h, z2, 0.18);
+  hedge(-4.5, -6.35, 4.35, -5.85); hedge(9.45, -6.35, 18.5, -5.85);
+  hedge(-4.5, -5.85, -4.0, 19, 0.9); hedge(18.0, -5.85, 18.5, 19, 0.9);
+  for (const x of [-0.6, 14.6]) for (const z of [4, 8, 12]) shrub(F, x, G0, z, 0.55, Math.round(x * 3 + z), DX.leafA);
+  for (const [x, z, s, sd] of [[-8, 8, 1.15, 1], [22, 9, 1.2, 2], [-7, 21, 1.05, 3], [21, 22, 1.1, 4], [-13, -4, 1.3, 5], [27, -3, 1.25, 6], [31, 14, 1.2, 7], [-15, 14, 1.15, 8]]) tree(F, x, z, s, sd);
+  placeModel(grp, 'Lantern', 4.85, 0, -6.05, 0, 1, 0, 1.9);
+  placeModel(grp, 'Lantern', 8.95, 0, -6.05, Math.PI, 1, 0, 1.9);
   // أعمدة إنارة الشارع
   for (const x of [-12, 26]) { F.cyl(M.alu, x, -6.8, 0.07, 0.12, 6, 8); F.beam(M.alu, [x, 6, -6.8], [x, 6, -8.2], 0.08, 0.08); F.box(M.lamp, x - 0.2, 5.88, -8.45, x + 0.2, 5.95, -8.0); }
 }
@@ -729,11 +736,208 @@ function buildFacadeDetails(grp, level) {
   F.cyl(M.lamp, 7.65, 1.2, 0.18, y0 + CEIL - 0.03, y0 + CEIL, 16);
 }
 
+/* ================= تفاصيل واقعية: خامات إضافية ================= */
+const DX = {};
+function buildDetailMaterials() {
+  // قماش السدو العربي: أحمر مع شرائط سوداء وبيضاء ومثلثات
+  const sadu = (g, s) => {
+    g.fillStyle = '#8a1e1e'; g.fillRect(0, 0, s, s);
+    const band = (y, h, col) => { g.fillStyle = col; g.fillRect(0, y, s, h); };
+    for (const [y, h] of [[0.06, 0.16], [0.56, 0.16]]) {
+      band(y * s, h * s, '#1a1514');
+      g.fillStyle = '#efe6d6';
+      const n = 10, w = s / n;
+      for (let i = 0; i < n; i++) { g.beginPath(); g.moveTo(i * w, (y + h) * s - 4); g.lineTo(i * w + w / 2, y * s + 4); g.lineTo(i * w + w, (y + h) * s - 4); g.closePath(); g.fill(); }
+      g.fillStyle = '#c9a227'; for (let i = 0; i < n; i++) g.fillRect(i * w + w / 2 - 3, (y + h / 2) * s - 3, 6, 6);
+    }
+    for (const y of [0.3, 0.34, 0.8, 0.84]) band(y * s, 0.012 * s, '#efe6d6');
+    for (const y of [0.42, 0.92]) band(y * s, 0.03 * s, '#3c1a12');
+    const r = rng(7); for (let k = 0; k < 9000; k++) { g.fillStyle = `rgba(0,0,0,${r() * 0.08})`; g.fillRect(r() * s, r() * s, 2, 1); }
+  };
+  const weaveN = normalTex(256, weaveH(64), 0.25, 1.5);
+  DX.sadu = new THREE.MeshStandardMaterial({ map: canvasTex(512, sadu, 0.6), normalMap: weaveN, normalScale: new THREE.Vector2(0.5, 0.5), roughness: 0.95 }); DX.sadu.userData.worldUV = true;
+  DX.saduPlain = new THREE.MeshStandardMaterial({ map: canvasTex(256, noiseTex('#7c1c1c', 0.1, 70), 0.4), normalMap: weaveN, normalScale: new THREE.Vector2(0.5, 0.5), roughness: 0.95 }); DX.saduPlain.userData.worldUV = true;
+  DX.cream = new THREE.MeshStandardMaterial({ map: canvasTex(256, noiseTex('#e9dfcd', 0.06, 71), 0.4), normalMap: weaveN, normalScale: new THREE.Vector2(0.4, 0.4), roughness: 0.95 }); DX.cream.userData.worldUV = true;
+  // سجادة فارسية
+  const persian = (g, s) => {
+    const r = rng(12);
+    g.fillStyle = '#7d1f24'; g.fillRect(0, 0, s, s);
+    for (let i = 0; i < 4; i++) { g.strokeStyle = ['#1d2e4f', '#d8b25a', '#e9dcc0', '#1d2e4f'][i]; g.lineWidth = s * [0.05, 0.012, 0.008, 0.02][i]; const m = s * [0.04, 0.085, 0.1, 0.12][i]; g.strokeRect(m, m, s - 2 * m, s - 2 * m); }
+    for (let i = 0; i < 24; i++) { const t = (i + 0.5) / 24; for (const [x, y] of [[t, 0.04], [t, 0.96], [0.04, t], [0.96, t]]) { g.fillStyle = i % 2 ? '#d8b25a' : '#e9dcc0'; g.beginPath(); g.arc(x * s, y * s, s * 0.011, 0, 7); g.fill(); } }
+    g.save(); g.translate(s / 2, s / 2);
+    for (let k = 5; k >= 1; k--) { g.fillStyle = ['#1d2e4f', '#d8b25a', '#9c2b2f', '#e9dcc0', '#1d2e4f'][k - 1]; g.beginPath(); for (let a = 0; a < 16; a++) { const ang = a / 16 * Math.PI * 2, rr = s * 0.045 * k * (a % 2 ? 0.75 : 1); g.lineTo(Math.cos(ang) * rr, Math.sin(ang) * rr); } g.closePath(); g.fill(); }
+    g.restore();
+    for (let i = 0; i < 160; i++) { const x = 0.16 + r() * 0.68, y = 0.16 + r() * 0.68; if (Math.hypot(x - 0.5, y - 0.5) < 0.26) continue; g.fillStyle = ['#d8b25a', '#e9dcc0', '#1d2e4f', '#3f6b4f'][i % 4]; g.save(); g.translate(x * s, y * s); g.rotate(r() * 3); g.fillRect(-s * 0.008, -s * 0.016, s * 0.016, s * 0.032); g.restore(); }
+    for (let k = 0; k < 30000; k++) { g.fillStyle = `rgba(0,0,0,${r() * 0.07})`; g.fillRect(r() * s, r() * s, 2, 2); }
+  };
+  DX.persian = new THREE.MeshStandardMaterial({ map: canvasTex(1024, persian), normalMap: weaveN, normalScale: new THREE.Vector2(0.6, 0.6), roughness: 1 });
+  // تنجيد مكبّس للظهر (أزرار على شكل معيّنات)
+  const tuft = (g, s) => { g.fillStyle = '#fff'; g.fillRect(0, 0, s, s); g.strokeStyle = '#999'; g.lineWidth = 6; const n = 4, st = s / n;
+    for (let i = -n; i <= 2 * n; i++) { g.beginPath(); g.moveTo(i * st, 0); g.lineTo(i * st + s, s); g.stroke(); g.beginPath(); g.moveTo(i * st, s); g.lineTo(i * st + s, 0); g.stroke(); }
+    g.fillStyle = '#000'; for (let i = 0; i <= n; i++) for (let j = 0; j <= n; j++) { g.beginPath(); g.arc(i * st, j * st, 9, 0, 7); g.fill(); } };
+  const tuftN = normalTex(256, tuft, 0.5, 4);
+  DX.headA = new THREE.MeshStandardMaterial({ color: '#6d7f8c', normalMap: tuftN, roughness: 0.95, sheen: 1 }); DX.headA.userData.worldUV = true;
+  DX.headB = new THREE.MeshStandardMaterial({ color: '#b39484', normalMap: tuftN, roughness: 0.95 }); DX.headB.userData.worldUV = true;
+  const quilt = (g, s) => { g.fillStyle = '#fff'; g.fillRect(0, 0, s, s); g.strokeStyle = '#777'; g.lineWidth = 5; for (let i = 0; i <= 4; i++) { g.beginPath(); g.moveTo(0, i * s / 4); g.lineTo(s, i * s / 4); g.stroke(); } };
+  DX.duvet = new THREE.MeshStandardMaterial({ color: '#f7f4ef', normalMap: normalTex(256, quilt, 0.8, 3), normalScale: new THREE.Vector2(0.6, 0.6), roughness: 1 }); DX.duvet.userData.worldUV = true;
+  DX.pillow = new THREE.MeshStandardMaterial({ color: '#fbfaf7', normalMap: weaveN, normalScale: new THREE.Vector2(0.3, 0.3), roughness: 1 }); DX.pillow.userData.worldUV = true;
+  const knit = normalTex(128, (g, s) => { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const v = ((x + (y % 2)) % 2) ? 220 : 60; g.fillStyle = `rgb(${v},${v},${v})`; g.beginPath(); g.ellipse(x * s / 16 + 4, y * s / 16 + 4, 3, 5, 0, 0, 7); g.fill(); } }, 0.15, 2);
+  DX.throwA = new THREE.MeshStandardMaterial({ color: '#4f6d7d', normalMap: knit, roughness: 1 }); DX.throwA.userData.worldUV = true;
+  DX.throwB = new THREE.MeshStandardMaterial({ color: '#b5735c', normalMap: knit, roughness: 1 }); DX.throwB.userData.worldUV = true;
+  DX.chairFab = new THREE.MeshStandardMaterial({ map: canvasTex(256, noiseTex('#cfc4b2', 0.07, 72), 0.4), normalMap: weaveN, normalScale: new THREE.Vector2(0.5, 0.5), roughness: 1 }); DX.chairFab.userData.worldUV = true;
+  DX.shade = new THREE.MeshStandardMaterial({ color: '#f3e9d6', emissive: '#ffdca0', emissiveIntensity: 0.6, roughness: 1, side: THREE.DoubleSide });
+  DX.ceramic = std('#d9d3c8', 0.3); DX.ceramicDark = std('#2f3b3a', 0.25);
+  DX.glassCup = new THREE.MeshPhysicalMaterial({ color: '#ffffff', roughness: 0.05, transparent: true, opacity: 0.3, depthWrite: false });
+  DX.runner = std('#4c6656', 1);
+  DX.brass = std('#c49a3a', 0.3, 1);
+  // لحاء الأشجار والنخيل
+  const bark = (g, s) => { const r = rng(31); g.fillStyle = '#6b5442'; g.fillRect(0, 0, s, s); for (let k = 0; k < 260; k++) { g.strokeStyle = `rgba(${30 + r() * 40},${20 + r() * 30},${10 + r() * 20},${0.3 + r() * 0.5})`; g.lineWidth = 1 + r() * 4; const x = r() * s; g.beginPath(); g.moveTo(x, 0); for (let y = 0; y <= s; y += 16) g.lineTo(x + Math.sin(y / 30 + k) * 4, y); g.stroke(); } };
+  const barkH = (g, s) => { const r = rng(32); g.fillStyle = '#888'; g.fillRect(0, 0, s, s); for (let k = 0; k < 200; k++) { g.strokeStyle = r() > 0.5 ? '#222' : '#ddd'; g.lineWidth = 2 + r() * 5; const x = r() * s; g.beginPath(); g.moveTo(x, 0); g.lineTo(x + (r() - 0.5) * 10, s); g.stroke(); } };
+  DX.bark = new THREE.MeshStandardMaterial({ map: canvasTex(256, bark, 1.0), normalMap: normalTex(256, barkH, 1.0, 3), roughness: 1 }); DX.bark.userData.worldUV = true;
+  const palmBark = (g, s) => { g.fillStyle = '#8a7356'; g.fillRect(0, 0, s, s); const r = rng(33); for (let y = 0; y < s; y += s / 8) for (let x = 0; x < s; x += s / 6) { const o = (Math.floor(y / (s / 8)) % 2) * s / 12; g.fillStyle = `rgb(${110 + r() * 30},${88 + r() * 25},${62 + r() * 20})`; g.beginPath(); g.moveTo(x + o, y); g.lineTo(x + o + s / 12, y + s / 8); g.lineTo(x + o + s / 6, y); g.closePath(); g.fill(); g.strokeStyle = 'rgba(40,28,15,0.6)'; g.lineWidth = 3; g.stroke(); } };
+  const palmH = (g, s) => { g.fillStyle = '#fff'; g.fillRect(0, 0, s, s); for (let y = 0; y < s; y += s / 8) for (let x = 0; x < s; x += s / 6) { const o = (Math.floor(y / (s / 8)) % 2) * s / 12; g.strokeStyle = '#000'; g.lineWidth = 6; g.beginPath(); g.moveTo(x + o, y); g.lineTo(x + o + s / 12, y + s / 8); g.lineTo(x + o + s / 6, y); g.stroke(); } };
+  DX.palmBark = new THREE.MeshStandardMaterial({ map: canvasTex(256, palmBark, 0.6), normalMap: normalTex(256, palmH, 0.6, 3), roughness: 1 }); DX.palmBark.userData.worldUV = true;
+  // بطاقات الأوراق (بخلفية شفافة)
+  const leafCard = (seed, cols) => (g, s) => { const r = rng(seed); g.clearRect(0, 0, s, s);
+    for (let i = 0; i < 70; i++) { const x = s * (0.12 + r() * 0.76), y = s * (0.12 + r() * 0.76), a = r() * Math.PI * 2, l = s * (0.07 + r() * 0.05);
+      g.save(); g.translate(x, y); g.rotate(a); g.fillStyle = cols[Math.floor(r() * cols.length)]; g.beginPath(); g.ellipse(0, 0, l * 0.42, l, 0, 0, 7); g.fill(); g.strokeStyle = 'rgba(20,40,10,0.5)'; g.lineWidth = 1.2; g.beginPath(); g.moveTo(0, -l); g.lineTo(0, l); g.stroke(); g.restore(); } };
+  const alphaMat = (draw, size = 256) => { const t = canvasTex(size, draw); t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; return new THREE.MeshStandardMaterial({ map: t, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.85 }); };
+  DX.leafA = alphaMat(leafCard(41, ['#3f6b2c', '#4f7e35', '#5f8f3d', '#2f5522', '#6c9a45']));
+  DX.leafB = alphaMat(leafCard(42, ['#557a2a', '#6b8d33', '#80a043', '#46682a']));
+  DX.hedge = alphaMat(leafCard(43, ['#2f5a26', '#3b6a2c', '#467a33', '#27491f']));
+  // سياج شجيرات مقصوص: خامة أوراق كثيفة معتمة
+  const hedgeDraw = (g, s) => { g.fillStyle = '#24401c'; g.fillRect(0, 0, s, s); leafCard(44, ['#2f5a26', '#3b6a2c', '#467a33', '#2a4d21', '#527f3a'])(g, s); const r = rng(45); for (let i = 0; i < 260; i++) { g.save(); g.translate(r() * s, r() * s); g.rotate(r() * 6.28); g.fillStyle = ['#355f29', '#41702f', '#2c5223', '#4c7c37'][i % 4]; g.beginPath(); g.ellipse(0, 0, 5, 11, 0, 0, 7); g.fill(); g.restore(); } };
+  const hc = document.createElement('canvas'); hc.width = hc.height = 256; hedgeDraw(hc.getContext('2d'), 256);
+  const ht = new THREE.CanvasTexture(hc); ht.wrapS = ht.wrapT = THREE.RepeatWrapping; ht.colorSpace = THREE.SRGBColorSpace; ht.repeat.set(1 / 0.5, 1 / 0.5);
+  DX.hedgeSolid = new THREE.MeshStandardMaterial({ map: ht, normalMap: normalTex(256, noiseH(46, 1, 4), 0.5, 4), roughness: 1 }); DX.hedgeSolid.userData.worldUV = true;
+  // سعف النخيل
+  DX.frond = alphaMat((g, s) => { g.clearRect(0, 0, s, s); g.strokeStyle = '#6b6a2e'; g.lineWidth = 6; g.beginPath(); g.moveTo(s / 2, s); g.lineTo(s / 2, 0); g.stroke();
+    for (let i = 0; i < 46; i++) { const y = s - (i + 1) * s / 48, w = s * 0.48 * Math.sin(Math.PI * (i + 2) / 50); for (const d of [-1, 1]) { g.strokeStyle = i % 3 ? '#4f7d2f' : '#5d8a36'; g.lineWidth = 4.5; g.beginPath(); g.moveTo(s / 2, y); g.quadraticCurveTo(s / 2 + d * w * 0.5, y - 6, s / 2 + d * w, y - 22); g.stroke(); } } }, 512);
+  // الزهور
+  const petals = (col, center, n = 6) => (g, s) => { g.clearRect(0, 0, s, s); g.save(); g.translate(s / 2, s / 2);
+    for (let i = 0; i < n; i++) { g.rotate(Math.PI * 2 / n); g.fillStyle = col; g.beginPath(); g.ellipse(0, -s * 0.24, s * 0.13, s * 0.24, 0, 0, 7); g.fill(); g.strokeStyle = 'rgba(0,0,0,0.12)'; g.stroke(); }
+    g.fillStyle = center; g.beginPath(); g.arc(0, 0, s * 0.1, 0, 7); g.fill(); g.restore(); };
+  DX.flowers = [['#d6283a', '#f2c230'], ['#f08bb4', '#f6d96b'], ['#f6f1e8', '#f2b627'], ['#f3c22b', '#8a4b12'], ['#8e5cc6', '#f6d96b'], ['#f07a2b', '#5a2a0e']].map(([a, b], i) => alphaMat(petals(a, b, i === 3 ? 12 : 6), 128));
+  DX.stem = std('#3f6b2c', 0.9);
+  DX.mulch = texMat(canvasTex(256, noiseTex('#5a4232', 0.25, 44), 0.8), 1);
+  DX.edging = texMat(canvasTex(256, noiseTex('#cfc6b6', 0.12, 45), 0.5), 0.9);
+  DX.stone = texMat(canvasTex(256, noiseTex('#bdb3a2', 0.15, 46), 0.6), 0.95);
+  DX.dates = std('#7a3b12', 0.5);
+}
+
+/* ================= أدوات هندسية إضافية ================= */
+function rboxGeo(w, h, d, r) { return new RoundedBoxGeometry(w, h, d, 3, Math.max(0.002, Math.min(r, Math.min(w, h, d) / 2 - 0.002))); }
+function rbox(F, mat, x1, y1, z1, x2, y2, z2, r = 0.05) { const g = rboxGeo(Math.abs(x2 - x1), Math.abs(y2 - y1), Math.abs(z2 - z1), r); g.translate((x1 + x2) / 2, (y1 + y2) / 2, (z1 + z2) / 2); return F.add(mat, g); }
+function rboxRot(F, mat, cx, cy, cz, w, h, d, r, rx = 0, ry = 0, rz = 0) { const g = rboxGeo(w, h, d, r); g.rotateX(rx); g.rotateZ(rz); g.rotateY(ry); g.translate(cx, cy, cz); return F.add(mat, g); }
+function lathe(F, mat, x, y, z, pts, seg = 24) { const g = new THREE.LatheGeometry(pts.map(([r, h]) => new THREE.Vector2(r, h)), seg); g.translate(x, y, z); return F.add(mat, g); }
+function card(F, mat, x, y, z, size, rx, ry, rz) { const g = new THREE.PlaneGeometry(size, size); g.rotateZ(rz); g.rotateX(rx); g.rotateY(ry); g.translate(x, y, z); return F.add(mat, g); }
+
+/* ================= أشجار ونخيل وزهور ================= */
+function tree(F, x, z, s = 1, seed = 1) {
+  const r = rng(seed);
+  const H = 3.2 * s;
+  F.cyl(DX.bark, x, z, 0.16 * s, 0, H * 0.55, 10, 0.11 * s);
+  const crown = [];
+  for (let b = 0; b < 5; b++) {
+    const a = b / 5 * 6.28 + r(), y0 = H * (0.4 + r() * 0.15), len = 1.3 * s * (0.7 + r() * 0.4);
+    const ex = x + Math.cos(a) * len * 0.75, ez = z + Math.sin(a) * len * 0.75, ey = y0 + len * 0.7;
+    F.beam(DX.bark, [x, y0, z], [ex, ey, ez], 0.09 * s, 0.09 * s);
+    crown.push([ex, ey, ez]);
+  }
+  crown.push([x, H * 0.95, z]);
+  const n = Math.round(130 * s);
+  for (let i = 0; i < n; i++) {
+    const c = crown[i % crown.length], R = 1.1 * s;
+    const u = r() * 6.28, v = Math.acos(2 * r() - 1), d = Math.cbrt(r()) * R;
+    card(F, r() > 0.5 ? DX.leafA : DX.leafB, c[0] + Math.sin(v) * Math.cos(u) * d, c[1] + Math.cos(v) * d * 0.75, c[2] + Math.sin(v) * Math.sin(u) * d, 0.9 * s, r() * 6.28, r() * 6.28, r() * 6.28);
+  }
+}
+function palm(F, x, z, h = 5, seed = 1, y = 0) {
+  const r = rng(seed);
+  const lean = (r() - 0.5) * 0.4, la = r() * 6.28;
+  const top = [x + Math.cos(la) * lean, y + h, z + Math.sin(la) * lean];
+  const segs = 6;
+  for (let i = 0; i < segs; i++) {
+    const t0 = i / segs, t1 = (i + 1) / segs, ease = (t) => t * t;
+    const p0 = [x + (top[0] - x) * ease(t0), y + h * t0, z + (top[2] - z) * ease(t0)], p1 = [x + (top[0] - x) * ease(t1), y + h * t1, z + (top[2] - z) * ease(t1)];
+    const g = new THREE.CylinderGeometry(0.17 - 0.03 * t1, 0.2 - 0.03 * t0, h / segs + 0.02, 12);
+    const d = new THREE.Vector3(p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]);
+    g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()));
+    g.translate((p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2, (p0[2] + p1[2]) / 2); F.add(DX.palmBark, g);
+  }
+  F.sphere(DX.palmBark, top[0], top[1], top[2], 0.26, 1, 0.9, 1, 10);
+  const n = 20;
+  for (let i = 0; i < n; i++) {
+    const az = i / n * 6.28 + r() * 0.2, up = 0.5 + (i % 3) * 0.35 + r() * 0.2, L = 2.4 + r() * 0.6;
+    const g = new THREE.PlaneGeometry(1.0, L, 1, 10);
+    const p = g.attributes.position;
+    for (let k = 0; k < p.count; k++) {
+      const px = p.getX(k), t = (p.getY(k) + L / 2) / L, sDist = t * L;
+      const ang = up - t * 1.7;
+      p.setXYZ(k, px, Math.sin(ang) * sDist * 0.6 + Math.abs(px) * 0.25 - t * t * 0.7, Math.cos(up * 0.4) * sDist);
+    }
+    g.computeVertexNormals(); g.rotateY(az); g.translate(top[0], top[1], top[2]);
+    F.add(DX.frond, g);
+  }
+  for (let i = 0; i < 3; i++) { const a = r() * 6.28; F.sphere(DX.dates, top[0] + Math.cos(a) * 0.32, top[1] - 0.35, top[2] + Math.sin(a) * 0.32, 0.16, 1, 1.4, 1, 8); }
+}
+function shrub(F, x, y, z, s = 0.6, seed = 3, mat) {
+  const r = rng(seed);
+  for (let i = 0; i < 16; i++) card(F, mat || DX.hedge, x + (r() - 0.5) * s, y + s * 0.5 + (r() - 0.3) * s * 0.6, z + (r() - 0.5) * s, s * 0.9, r() * 6.28, r() * 6.28, r() * 6.28);
+}
+function flowerBed(F, x1, z1, x2, z2, y = 0, density = 26, seed = 5, colors) {
+  const r = rng(seed);
+  rbox(F, DX.edging, x1 - 0.06, y, z1 - 0.06, x2 + 0.06, y + 0.14, z2 + 0.06, 0.03);
+  F.box(DX.mulch, x1, y + 0.14, z1, x2, y + 0.16, z2);
+  const n = Math.round((x2 - x1) * (z2 - z1) * density);
+  const pal = colors || [0, 1, 2, 3, 4, 5];
+  for (let i = 0; i < n; i++) {
+    const fx = x1 + 0.05 + r() * (x2 - x1 - 0.1), fz = z1 + 0.05 + r() * (z2 - z1 - 0.1), h = y + 0.16 + 0.18 + r() * 0.22;
+    F.box(DX.stem, fx - 0.004, y + 0.16, fz - 0.004, fx + 0.004, h, fz + 0.004);
+    const m = DX.flowers[pal[Math.floor(r() * pal.length)]];
+    card(F, m, fx, h, fz, 0.1 + r() * 0.05, -Math.PI / 2 + (r() - 0.5) * 0.6, r() * 6.28, 0);
+    if (i % 3 === 0) card(F, DX.leafA, fx, y + 0.24, fz, 0.22, r() * 6.28, r() * 6.28, r() * 6.28);
+  }
+}
+
+/* ================= أسرّة واقعية ================= */
+function realBed(F, head, throwMat, frameMat) {
+  // F: محور z يبدأ من الجدار (رأس السرير) نحو أسفل السرير
+  rbox(F, head, -1.08, 0.22, 0.0, 1.08, 1.45, 0.12, 0.05);           // ظهر منجّد مكبّس
+  rbox(F, frameMat, -1.12, 0.18, -0.01, 1.12, 0.24, 0.13, 0.02);
+  rbox(F, head, -1.0, 0.1, 0.12, 1.0, 0.38, 2.2, 0.05);              // قاعدة منجّدة
+  for (const [x, z] of [[-0.9, 0.2], [0.9, 0.2], [-0.9, 2.1], [0.9, 2.1]]) F.cyl(frameMat, x, z, 0.03, 0, 0.1, 8, 0.025);
+  rbox(F, M.linen, -0.94, 0.38, 0.15, 0.94, 0.6, 2.16, 0.08);         // فرشة
+  rbox(F, DX.duvet, -1.0, 0.5, 0.78, 1.0, 0.66, 2.24, 0.1);           // لحاف
+  rboxRot(F, DX.duvet, 0, 0.66, 0.85, 2.0, 0.08, 0.3, 0.04, 0, 0, 0); // طرف اللحاف المطوي
+  rbox(F, throwMat, -1.03, 0.6, 1.72, 1.03, 0.7, 2.05, 0.04);        // شال عند القدمين
+  for (const sx of [-0.45, 0.45]) rboxRot(F, DX.pillow, sx, 0.78, 0.3, 0.78, 0.2, 0.46, 0.09, -1.05);
+  for (const sx of [-0.28, 0.28]) rboxRot(F, throwMat, sx, 0.78, 0.5, 0.42, 0.14, 0.38, 0.06, -1.15);
+  rboxRot(F, DX.pillow, 0, 0.74, 0.62, 0.5, 0.12, 0.28, 0.05, -1.25);
+  for (const s of [-1, 1]) {
+    const x = s * 1.38;
+    rbox(F, frameMat, x - 0.26, 0.12, 0.02, x + 0.26, 0.55, 0.44, 0.02);
+    F.box(M.black, x - 0.2, 0.33, 0.441, x + 0.2, 0.335, 0.445);
+    F.box(M.gold, x - 0.05, 0.43, 0.44, x + 0.05, 0.44, 0.46);
+    for (const [lx, lz] of [[-0.2, 0.06], [0.2, 0.06], [-0.2, 0.4], [0.2, 0.4]]) F.cyl(M.black, x + lx, lz, 0.012, 0, 0.12, 6);
+    lathe(F, DX.ceramic, x, 0.55, 0.22, [[0, 0], [0.07, 0], [0.09, 0.08], [0.08, 0.2], [0.03, 0.26], [0.015, 0.34], [0, 0.34]]);
+    F.cyl(DX.shade, x, 0.22, 0.14, 0.86, 1.08, 20, 0.11);
+  }
+}
+
+/* ================= كرسي طعام منجّد ================= */
+function diningChair(F) {
+  for (const [x, z] of [[-0.19, -0.19], [0.19, -0.19], [-0.19, 0.19], [0.19, 0.19]]) F.cyl(M.walnut, x, z, 0.018, 0, 0.44, 8, 0.024);
+  rbox(F, DX.chairFab, -0.24, 0.42, -0.24, 0.24, 0.52, 0.24, 0.04);
+  rboxRot(F, DX.chairFab, 0, 0.78, 0.235, 0.46, 0.52, 0.07, 0.035, -0.1);
+  F.beam(M.walnut, [-0.19, 0.44, 0.21], [-0.2, 1.0, 0.27], 0.03, 0.03); F.beam(M.walnut, [0.19, 0.44, 0.21], [0.2, 1.0, 0.27], 0.03, 0.03);
+}
+
 /* ================= الأثاث ================= */
 const PLACED = [];
-const isInterior = (F) => F.g === groups.f0 || F.g === groups.f1 || F.g === groups.veranda;
+const isInterior = (F) => F.g === groups.f0 || F.g === groups.f1 || F.g === groups.veranda || F.g === groups.site;
 function worldPt(F, x, y, z) { return new THREE.Vector3(x, y, z).applyMatrix4(F.M); }
-function placeModel(group, name, x, y, z, rot = 0, scale = 1) { PLACED.push({ group, name, x, y, z, rot, scale }); }
+function placeModel(group, name, x, y, z, rot = 0, scale = 1, fit = 0, fitH = 0) { PLACED.push({ group, name, x, y, z, rot, scale, fit, fitH }); }
 function plant(F, x, y, z, s = 1) {
   if (isInterior(F)) { const p = worldPt(F, x, y, z); placeModel(F.g, 'DiffuseTransmissionPlant', p.x, p.y, p.z, (x * 7 + z * 3) % 6.28, 1.25 * s); return; }
   F.cyl(M.potWhite, x, z, 0.2 * s, y, y + 0.45 * s, 14, 0.24 * s);
@@ -794,29 +998,46 @@ function furnish(grp, level) {
   /* ---- المجلس العربي (6.6 × 4.45) ---- */
   W.box(M.paintMajlis, 0.13, 0, 0.13, 0.15, CEIL, 4.37);
   W.box(M.paintMajlis, 0.13, 0, 4.36, 6.52, CEIL, 4.375);
-  // جلسات أرضية على شكل U
-  const seat = (x1, z1, x2, z2, backSide) => {
-    W.box(M.majlisSeat, x1, 0, z1, x2, 0.25, z2);
-    W.box(M.gold, x1, 0.25, z1, x2, 0.27, z2);
-    const bt = 0.16;
-    if (backSide === 'x-') W.box(M.majlisBack, x1, 0.27, z1, x1 + bt, 0.82, z2);
-    if (backSide === 'z-') W.box(M.majlisBack, x1, 0.27, z1, x2, 0.82, z1 + bt);
-    if (backSide === 'z+') W.box(M.majlisBack, x1, 0.27, z2 - bt, x2, 0.82, z2);
+  // جلسة أرضية من قماش السدو: قاعدة، ومقاعد ومساند منفصلة، ومساند ذراع أسطوانية
+  const majRun = (axis, a1, a2, c1, c2, wallSide) => {
+    // axis 'z': المقعد يمتد على z (الجدار عند x=c1)، axis 'x': يمتد على x (الجدار عند z=c1 أو z=c2)
+    const box = (m, u1, u2, v1, v2, y1, y2, r) => axis === 'z' ? rbox(W, m, v1, y1, u1, v2, y2, u2, r) : rbox(W, m, u1, y1, v1, u2, y2, v2, r);
+    box(DX.saduPlain, a1, a2, c1, c2, 0, 0.13, 0.02);
+    const n = Math.max(1, Math.round((a2 - a1) / 1.0)), L = (a2 - a1) / n;
+    for (let i = 0; i < n; i++) {
+      const u1 = a1 + i * L + 0.015, u2 = a1 + (i + 1) * L - 0.015, um = (u1 + u2) / 2;
+      box(DX.sadu, u1, u2, c1 + 0.02, c2 - 0.02, 0.13, 0.27, 0.05);
+      const wv = wallSide < 0 ? c1 + 0.12 : c2 - 0.12;
+      if (axis === 'z') rboxRot(W, DX.sadu, wv, 0.56, um, 0.18, 0.56, u2 - u1, 0.06, 0, 0, 0.12 * -wallSide);
+      else rboxRot(W, DX.sadu, um, 0.56, wv, u2 - u1, 0.56, 0.18, 0.06, 0.12 * wallSide, 0, 0);
+      if (i % 2 === 0 || i === n - 1) {
+        const ub = i % 2 === 0 ? u1 + 0.02 : u2 - 0.02, len = (c2 - c1) - 0.2;
+        const g = new THREE.CylinderGeometry(0.11, 0.11, len, 16); g.rotateX(Math.PI / 2);
+        if (axis === 'z') g.rotateY(Math.PI / 2);
+        const cv = (c1 + c2) / 2 + (wallSide < 0 ? 0.05 : -0.05);
+        axis === 'z' ? g.translate(cv, 0.38, ub) : g.translate(ub, 0.38, cv); W.add(DX.saduPlain, g);
+      }
+    }
   };
-  seat(0.15, 0.15, 0.9, 4.35, 'x-');
-  seat(0.9, 0.15, 5.6, 0.9, 'z-');
-  seat(0.9, 3.6, 5.6, 4.35, 'z+');
-  for (const z of [1.3, 2.3, 3.3]) W.cyl(M.majlisSeat, 0.55, z, 0.13, 0.27, 0.42, 12);
-  for (const x of [1.9, 3.1, 4.3]) { W.cyl(M.majlisSeat, x, 0.55, 0.13, 0.27, 0.42, 12); W.cyl(M.majlisSeat, x, 3.95, 0.13, 0.27, 0.42, 12); }
-  rug(W, M.rugMajlis, 1.2, 1.1, 5.2, 3.4);
-  // صينية وتمر وقهوة
-  W.cyl(M.walnut, 3.2, 2.8, 0.42, 0, 0.3, 24);
-  W.cyl(M.gold, 3.2, 2.8, 0.36, 0.3, 0.32, 24);
-  W.cyl(M.gold, 3.05, 2.75, 0.08, 0.32, 0.5, 12, 0.04); W.cyl(M.gold, 3.05, 2.75, 0.03, 0.5, 0.58, 8, 0.015);
-  for (const a of [0, 1.2, 2.4, 3.6]) W.cyl(M.porcelain, 3.35 + Math.cos(a) * 0.1, 2.85 + Math.sin(a) * 0.1, 0.03, 0.32, 0.37, 10, 0.035);
-  W.cyl(M.porcelain, 3.2, 2.55, 0.1, 0.32, 0.36, 14, 0.12);
+  majRun('z', 0.15, 4.35, 0.15, 0.95, -1);
+  majRun('x', 0.95, 5.65, 0.15, 0.95, -1);
+  majRun('x', 0.95, 5.65, 3.55, 4.35, 1);
+  W.box(DX.persian, 1.2, 0.003, 1.1, 5.2, 0.018, 3.4);
+  placeModel(grp, 'SpecularSilkPouf', 5.0, y0, 1.7, 0, 1, 0.5);
+  placeModel(grp, 'SpecularSilkPouf', 5.0, y0, 2.85, 0.5, 1, 0.5);
+  // صينية القهوة: دلة وفناجين وتمر
+  W.cyl(M.walnut, 3.2, 2.25, 0.45, 0, 0.28, 32, 0.45);
+  lathe(W, DX.brass, 3.2, 0.28, 2.25, [[0, 0], [0.42, 0], [0.43, 0.025], [0.4, 0.03], [0, 0.02]], 40);
+  lathe(W, DX.brass, 3.0, 0.3, 2.15, [[0, 0], [0.08, 0], [0.1, 0.06], [0.085, 0.14], [0.04, 0.2], [0.035, 0.27], [0.06, 0.3], [0.035, 0.33], [0.02, 0.38], [0, 0.39]]);
+  W.beam(DX.brass, [3.07, 0.42, 2.15], [3.2, 0.6, 2.15], 0.025, 0.025);
+  W.beam(DX.brass, [2.93, 0.5, 2.15], [2.86, 0.38, 2.15], 0.018, 0.018);
+  for (const a of [0, 1.1, 2.2, 3.3, 4.4]) lathe(W, M.porcelain, 3.3 + Math.cos(a) * 0.14, 0.3, 2.3 + Math.sin(a) * 0.14, [[0, 0], [0.018, 0], [0.03, 0.04], [0.032, 0.05], [0, 0.045]], 14);
+  lathe(W, DX.ceramicDark, 3.45, 0.3, 2.05, [[0, 0], [0.05, 0], [0.11, 0.05], [0.12, 0.07], [0, 0.03]], 24);
+  for (let i = 0; i < 9; i++) W.sphere(DX.dates, 3.45 + Math.cos(i * 2.4) * 0.05 * (i % 3), 0.36, 2.05 + Math.sin(i * 2.4) * 0.05 * (i % 3), 0.022, 1, 0.8, 1.6, 8);
+  // مبخرة خشبية في الزاوية
+  lathe(W, M.walnut, 6.2, 0, 0.45, [[0, 0], [0.12, 0], [0.12, 0.05], [0.07, 0.1], [0.06, 0.25], [0.11, 0.32], [0.11, 0.36], [0, 0.36]]);
+  lathe(W, DX.brass, 6.2, 0.36, 0.45, [[0, 0], [0.1, 0], [0.08, 0.06], [0, 0.07]]);
   // فانوس ونباتات
-  W.box(M.gold, 6.1, 0, 0.3, 6.4, 0.6, 0.6); W.box(M.lampWarm, 6.14, 0.1, 0.34, 6.36, 0.5, 0.56);
   plant(W, 6.15, 0, 4.05, 0.9);
   frameArt(W, M.art3, 2.4, 1.35, 4.2, 2.35, 4.375, -1);
   ceilingLight(W, 3.3, 2.2, 0, 0.4);
@@ -888,11 +1109,22 @@ function furnish(grp, level) {
   /* ---- غرفة الطعام (5.1 × 5) ---- */
   W.box(M.paintDining, 8.79, 0, 10.93, 13.86, CEIL, 10.94);
   rug(W, M.rugDining, 9.9, 12.4, 12.9, 14.9);
-  { const T = new Frame(grp, 11.4, y0, 13.65); table(T, 2.4, 1.1, 0.76, M.walnut, M.black);
-    for (const x of [-0.8, 0, 0.8]) { const a = new Frame(grp, 11.4 + x, y0, 13.65 - 0.8, Math.PI); chair(a); const b = new Frame(grp, 11.4 + x, y0, 13.65 + 0.8, 0); chair(b); }
-    const e1 = new Frame(grp, 11.4 - 1.5, y0, 13.65, -Math.PI / 2); chair(e1); const e2 = new Frame(grp, 11.4 + 1.5, y0, 13.65, Math.PI / 2); chair(e2);
-    flowers(T, 0, 0.76, 0, [M.flowerRed, M.flowerWhite, M.flowerPink], 1.1);
-    for (const x of [-0.7, 0.7]) T.cyl(M.porcelain, x, 0, 0.13, 0.76, 0.78, 16);
+  { const T = new Frame(grp, 11.4, y0, 13.65);
+    rbox(T, M.walnut, -1.2, 0.71, -0.55, 1.2, 0.76, 0.55, 0.012);
+    rbox(T, M.walnut, -1.05, 0.62, -0.42, 1.05, 0.71, 0.42, 0.01);
+    for (const [x, z] of [[-1.05, -0.42], [1.05, -0.42], [-1.05, 0.42], [1.05, 0.42]]) T.cyl(M.walnut, x, z, 0.025, 0, 0.71, 10, 0.04);
+    T.box(DX.runner, -1.25, 0.76, -0.17, 1.25, 0.765, 0.17);
+    const seats = [];
+    for (const x of [-0.8, 0, 0.8]) { seats.push([x, -1, Math.PI]); seats.push([x, 1, 0]); }
+    for (const [x, sgn, rot] of seats) {
+      diningChair(new Frame(grp, 11.4 + x, y0, 13.65 + sgn * 0.78, rot));
+      lathe(T, M.porcelain, x, 0.762, sgn * 0.33, [[0, 0], [0.1, 0], [0.13, 0.015], [0.135, 0.02], [0, 0.008]], 28);
+      lathe(T, DX.glassCup, x + 0.17, 0.762, sgn * 0.22, [[0, 0], [0.035, 0], [0.04, 0.12], [0, 0.12]], 16);
+      T.box(DX.runner, x - 0.2, 0.762, sgn * 0.33 - 0.06, x - 0.15, 0.768, sgn * 0.33 + 0.06);
+    }
+    diningChair(new Frame(grp, 11.4 - 1.45, y0, 13.65, -Math.PI / 2)); diningChair(new Frame(grp, 11.4 + 1.45, y0, 13.65, Math.PI / 2));
+    flowers(T, -0.35, 0.765, 0, [M.flowerRed, M.flowerWhite, M.flowerPink], 1.1);
+    placeModel(grp, 'IridescentDishWithOlives', 11.4 + 0.35, y0 + 0.765, 13.65, 0, 1, 0.32);
   }
   for (const x of [10.8, 11.4, 12.0]) { W.cyl(M.black, x, 13.65, 0.005, 2.0, CEIL, 4); W.cyl(M.gold, x, 13.65, 0.16, 1.85, 2.0, 16, 0.05); W.cyl(M.lampWarm, x, 13.65, 0.14, 1.84, 1.86, 16); }
   W.box(M.walnut, 10.3, 0.1, 10.94, 12.5, 0.85, 11.4);  // بوفيه
@@ -963,18 +1195,8 @@ function bedroom(grp, y0, R, paint, head, throwMat, up) {
   const W = new Frame(grp, 0, y0, 0);
   W.box(paint, R.x1, 0, R.z1, R.x2, CEIL, R.z1 + 0.01);
   const cx = 2.3;
-  const Bd = new Frame(grp, cx, y0, R.z1 + 0.02);
-  Bd.box(head, -1.05, 0.2, 0, 1.05, 1.3, 0.1);
-  Bd.box(M.walnut, -0.95, 0.12, 0.1, 0.95, 0.38, 2.15);
-  Bd.box(M.linen, -0.92, 0.38, 0.12, 0.92, 0.6, 2.12);
-  Bd.box(throwMat, -0.94, 0.4, 1.35, 0.94, 0.63, 2.14);
-  Bd.box(M.linen, -0.75, 0.6, 0.18, -0.1, 0.75, 0.55); Bd.box(M.linen, 0.1, 0.6, 0.18, 0.75, 0.75, 0.55);
-  Bd.box(throwMat, -0.4, 0.6, 0.5, 0.4, 0.72, 0.65);
-  for (const s of [-1, 1]) {
-    Bd.box(M.oak, s * 1.35 - 0.25, 0, 0.02, s * 1.35 + 0.25, 0.5, 0.45);
-    Bd.cyl(M.porcelain, s * 1.35, 0.25, 0.08, 0.5, 0.75, 12, 0.05); Bd.cyl(M.lampWarm, s * 1.35, 0.25, 0.14, 0.75, 0.95, 14, 0.1);
-  }
-  rug(W, M.rugBed, 1.0, R.z1 + 1.2, 3.6, R.z1 + 2.9);
+  realBed(new Frame(grp, cx, y0, R.z1 + 0.02), DX.headA, DX.throwA, M.walnut);
+  rug(W, M.rugBed, 0.9, R.z1 + 1.1, 3.7, R.z1 + 3.0);
   // خزانة ملابس على الجدار السفلي
   W.box(M.cabUp, 0.2, 0, R.z2 - 0.6, 2.9, 2.5, R.z2);
   for (let x = 0.2; x < 2.9; x += 0.675) W.box(M.black, x + 0.3, 1.0, R.z2 - 0.605, x + 0.32, 1.4, R.z2 - 0.6);
@@ -986,19 +1208,13 @@ function bedroom2(grp, y0, up) {
   const W = new Frame(grp, 0, y0, 0);
   const R = { x1: 0.125, x2: 4.775, z1: 12.225, z2: 15.925 };
   W.box(M.paintRose, R.x1, 0, R.z1, R.x2, CEIL, R.z1 + 0.01);
-  const Bd = new Frame(grp, 2.3, y0, R.z1 + 0.02);
-  Bd.box(M.headboard2, -1.05, 0.2, 0, 1.05, 1.3, 0.1);
-  Bd.box(M.oak, -0.95, 0.12, 0.1, 0.95, 0.38, 2.15);
-  Bd.box(M.linen, -0.92, 0.38, 0.12, 0.92, 0.6, 2.12);
-  Bd.box(M.bedThrow2, -0.94, 0.4, 1.35, 0.94, 0.63, 2.14);
-  Bd.box(M.linen, -0.75, 0.6, 0.18, -0.1, 0.75, 0.55); Bd.box(M.linen, 0.1, 0.6, 0.18, 0.75, 0.75, 0.55);
-  for (const s of [-1, 1]) { Bd.box(M.walnut, s * 1.35 - 0.25, 0, 0.02, s * 1.35 + 0.25, 0.5, 0.45); Bd.cyl(M.lampWarm, s * 1.35, 0.25, 0.13, 0.5, 0.85, 14, 0.08); }
+  realBed(new Frame(grp, 2.3, y0, R.z1 + 0.02), DX.headB, DX.throwB, M.oak);
   rug(W, M.rugBed, 1.0, R.z1 + 1.2, 3.6, R.z1 + 2.9);
   W.box(M.cabUp, 4.2, 0, 13.55, R.x2, 2.5, 15.85);
   for (let z = 13.55; z < 15.8; z += 0.575) W.box(M.black, 4.195, 1.0, z + 0.27, 4.2, 1.4, z + 0.29);
   // مكتب وكرسي قرب النافذة الخلفية
   { const D = new Frame(grp, 3.0, y0, 15.55); table(D, 1.3, 0.6, 0.75, M.oak, M.black); D.cyl(M.black, 0.45, 0, 0.015, 0.75, 1.15, 6); D.cyl(M.lampWarm, 0.45, -0.05, 0.08, 1.1, 1.18, 10, 0.05); flowers(D, -0.4, 0.75, 0, [M.flowerYellow], 0.7); }
-  { const C = new Frame(grp, 3.0, y0, 14.95, Math.PI); chair(C, M.black, M.sofaDark); }
+  diningChair(new Frame(grp, 3.0, y0, 14.95, Math.PI));
   plant(W, 0.5, 0, 15.5, 0.9);
   ceilingLight(W, 2.4, 14.0, 0, 0.3);
 }
@@ -1048,6 +1264,7 @@ for (const g of Object.values(groups)) scene.add(g);
 document.getElementById('loading').textContent = 'جاري تحميل الخامات…';
 await loadImages();
 buildMaterials();
+buildDetailMaterials();
 buildSite(groups.site);
 for (const level of [0, 1]) {
   const gw = level ? groups.g1 : groups.g0;
@@ -1071,7 +1288,9 @@ B.finalize();
     const lights = []; src[n].traverse(o => { if (o.isLight) lights.push(o); }); lights.forEach(o => o.removeFromParent()); // نموذج النبتة يحمل أضواء مضمّنة ثقيلة
     src[n].traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } }); }));
   for (const p of PLACED) {
-    const o = src[p.name].clone(); o.scale.setScalar(p.scale); o.rotation.y = p.rot; o.updateMatrixWorld(true);
+    const o = src[p.name].clone(); o.rotation.y = p.rot;
+    if (p.fit || p.fitH) { o.updateMatrixWorld(true); const sz = new THREE.Box3().setFromObject(o).getSize(new THREE.Vector3()); p.scale = p.fitH ? p.fitH / sz.y : p.fit / Math.max(sz.x, sz.z); }
+    o.scale.setScalar(p.scale); o.updateMatrixWorld(true);
     const b = new THREE.Box3().setFromObject(o);
     o.position.set(p.x - (b.min.x + b.max.x) / 2, p.y - b.min.y, p.z - (b.min.z + b.max.z) / 2);
     p.group.add(o);
